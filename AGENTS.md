@@ -1,5 +1,26 @@
 # Agent Instructions
 
+## Account-manager fork
+
+This fork's product branch is `manager`; `main` remains upstream history. The
+upstream v2.6.0 engine is extended by `manager/`, including multi-account workers,
+encrypted persistence, password setup, global appearance and manual renewal.
+Docker builds use this checkout's `src/`, `web/`, `lang/`, `icons/` and `main.py`.
+`manager/adapt_upstream.py` asserts integration patches at build time; update those
+assertions deliberately when changing an affected engine file. Dependency and noVNC
+assets come from the pinned upstream image. Do not copy live appdata into builds.
+
+For contributions to this fork, use a topic branch based on `manager`, integrate
+that branch before review, and apply the testing/security/independent-review
+requirements below. Instructions about PRs to rangermix or its version-release
+workflow apply when contributing upstream, not when publishing this fork's image.
+The original workflows are retained as inactive `.upstream` files for reference;
+`manager-container.yml` is this fork's active build/test/publish workflow. It
+publishes only tested images from `manager`, with read-only verification for PRs.
+The maintainer has authorized publishing this fork and its container deployment.
+See `docs/manager-deployment.md` and `docs/manager-development.md`. Keep private
+working notes in ignored `.dev-notes/`.
+
 
 ## Repository Instructions
 

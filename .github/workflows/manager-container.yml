@@ -1,0 +1,59 @@
+name: Manager container
+on:
+  push:
+    branches: [manager]
+  pull_request:
+    branches: [manager]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manager-container-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: ./.github/actions/manager-build
+
+  publish:
+    needs: verify
+    if: github.repository == 'gearheart89/twitch-drops-manager' && github.ref == 'refs/heads/manager' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      # Re-test this job's exact image before its tags are pushed.
+      - uses: ./.github/actions/manager-build
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish latest, revision and unique build tags
+        shell: bash
+        env:
+          REVISION: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          image=ghcr.io/gearheart89/twitch-drops-manager
+          docker tag twitch-drops-manager:ci "$image:build-$RUN_ID-$RUN_ATTEMPT"
+          docker tag twitch-drops-manager:ci "$image:sha-$REVISION"
+          docker tag twitch-drops-manager:ci "$image:latest"
+          docker push "$image:build-$RUN_ID-$RUN_ATTEMPT"
+          docker push "$image:sha-$REVISION"
+          current=$(git ls-remote origin refs/heads/manager | cut -f1)
+          if [ "$current" != "$REVISION" ]; then
+            echo 'A newer manager commit exists; leaving latest unchanged.'
+            exit 0
+          fi
+          docker push "$image:latest"

@@ -33,3 +33,15 @@ artifacts/
 
 # Private development plans, notes, and local verification records
 /.dev-notes/
+
+# Account-manager local storage and artifacts
+.env
+.secrets/
+__pycache__/
+.verification/
+dist/
+data/
+logs/
+backups/
+*.jar
+*cookies*

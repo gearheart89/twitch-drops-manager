@@ -1,5 +1,14 @@
 # Contributing to Twitch Drops Miner
 
+## Contributing to this account-manager fork
+
+This fork accepts account-manager and Docker/Unraid work on its `manager` branch.
+Use a topic branch from that product branch and target it for fork PRs. Preserve
+the test, security, attribution and independent-review requirements in this guide.
+The upstream-only exclusions of multiple accounts and its release workflow below
+describe rangermix/TwitchDropsMiner. This fork adds multi-account support and has
+its own tested image workflow; see [manager development](docs/manager-development.md).
+
 Contributions are welcome: bug reports, feature requests, code, tests, documentation,
 and translations. This guide defines the contribution workflow for people and coding
 agents. Agents must read it before starting work and follow the same requirements.

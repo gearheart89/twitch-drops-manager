@@ -1,68 +1,40 @@
-# Extract only noVNC's browser library, without installing its websockify server.
-FROM alpine:latest AS novnc-assets
-RUN apk add --no-cache novnc
+FROM rangermix/twitch-drops-miner:2.6.0@sha256:47dac0948845d436dacc843a7f2eeffb14cedb2eb69e54bdf648a2be19513f99 AS miner
+RUN python -c "import importlib.metadata as m; print('\n'.join(sorted(d.metadata['Name']+'=='+d.version for d in m.distributions() if d.metadata['Name'].lower() not in {'twitch-drops-miner','pip','setuptools'})))" > /requirements-miner.txt
 
-FROM python:alpine
-
-# Build arguments for metadata
-ARG BUILD_DATE
-ARG VCS_REF
-ARG VERSION
-
-# Labels following OCI Image Format Specification
-LABEL org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.authors="rangermix" \
-      org.opencontainers.image.url="https://github.com/rangermix/TwitchDropsMiner" \
-      org.opencontainers.image.documentation="https://github.com/rangermix/TwitchDropsMiner/blob/main/README.md" \
-      org.opencontainers.image.source="https://github.com/rangermix/TwitchDropsMiner" \
-      org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.revision="${VCS_REF}" \
-      org.opencontainers.image.vendor="rangermix" \
-      org.opencontainers.image.title="Twitch Drops Miner" \
-      org.opencontainers.image.description="Automated Twitch drops mining application with web-based interface"
-
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8080
-
-# Set working directory
-WORKDIR /app
-
-# Login and renewal use private browsers; only the dashboard port is exposed.
-RUN apk upgrade --no-cache \
-    && apk add --no-cache chromium xvfb xvfb-run xauth openbox x11vnc xdotool tzdata tini
-COPY --from=novnc-assets /usr/share/novnc/ /usr/share/novnc/
-RUN addgroup -g 10001 -S tdm-browser \
-    && adduser -u 10001 -S -D -H -h /nonexistent -s /sbin/nologin -G tdm-browser tdm-browser
-
-# Copy project metadata and install dependencies
-COPY pyproject.toml .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir . \
-    && pip uninstall --yes pip
-
-# Copy application code
-COPY main.py ./
-COPY src/ ./src/
-COPY lang/ ./lang/
-COPY icons/ ./icons/
-COPY web/ ./web/
-
-# Create data directory for persistent storage
-RUN mkdir -p /app/data /app/logs && chmod 700 /app/data /app/logs
-
-# Expose web port
+FROM python:3.15-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
+RUN test "$(dpkg --print-architecture)" = amd64
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl gnupg tzdata xvfb xauth openbox x11vnc xdotool fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://dl.google.com/linux/linux_signing_key.pub -o /tmp/google-signing-key.pub \
+    && gpg --batch --dearmor -o /usr/share/keyrings/google-chrome.gpg /tmp/google-signing-key.pub \
+    && echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main' > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update && apt-get install -y --no-install-recommends google-chrome-stable \
+    && rm -rf /var/lib/apt/lists/* /tmp/google-signing-key.pub
+RUN groupadd --gid 10001 tdm-browser \
+    && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin tdm-browser
+COPY --from=miner /usr/share/novnc /usr/share/novnc
+COPY --from=miner /requirements-miner.txt /requirements-miner.txt
+RUN python -m pip install --no-cache-dir -r /requirements-miner.txt cryptography==50.0.2 \
+    && python -m pip uninstall -y pip
+RUN apt-get update && apt-get install -y --no-install-recommends wmctrl \
+    && rm -rf /var/lib/apt/lists/*
+# Keep dependency layers cached while building the engine from this fork.
+COPY main.py /app/main.py
+COPY src/ /app/src/
+COPY web/ /app/web/
+COPY lang/ /app/lang/
+COPY icons/ /app/icons/
+COPY LICENSE /app/LICENSE
+COPY manager /manager
+COPY THIRD_PARTY_NOTICES.md /app/THIRD_PARTY_NOTICES.md
+RUN python /manager/adapt_upstream.py && mkdir -p /run/secrets /data /runtime && chmod 700 /run/secrets /data /runtime
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TDM_BROWSER_COMPAT=off
+LABEL org.opencontainers.image.title="Twitch Drops Manager" \
+      org.opencontainers.image.source="https://github.com/gearheart89/twitch-drops-manager" \
+      org.opencontainers.image.description="Multi-account Twitch Drops dashboard with encrypted storage and Unraid deployment" \
+      net.unraid.docker.icon="https://raw.githubusercontent.com/gearheart89/twitch-drops-manager/manager/manager/web/icon.png"
+WORKDIR /manager
 EXPOSE 8080
-
-# Health check. Exec form: a timeout kills the probe itself, not a shell that orphans it.
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
-
-# Reap orphaned processes, such as browser helpers, with or without Docker's --init.
-# -s avoids tini's warning when --init makes it a child of Docker's own init.
-ENTRYPOINT ["/sbin/tini", "-s", "--"]
-
-# Run the application (web GUI is now default)
-CMD ["python", "main.py"]
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/_manager/health', timeout=10)"
+CMD ["python", "/manager/server.py"]

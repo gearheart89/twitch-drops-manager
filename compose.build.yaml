@@ -1,0 +1,4 @@
+services:
+  manager:
+    build: .
+    image: twitch-drops-manager:local
