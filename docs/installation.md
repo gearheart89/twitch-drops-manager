@@ -1,5 +1,9 @@
 # Installation
 
+For this fork's multi-account Docker or Unraid manager, follow
+[manager deployment](manager-deployment.md). The guide below describes the upstream
+single-account miner.
+
 Run TDM on your own computer or home server with Docker. The v2.6.0 image
 includes the dashboard's Twitch login browser, optional desktop-helper access, and
 automatic session renewal.
@@ -111,7 +115,7 @@ To protect access or use your own reverse proxy, follow
 
 ### Build a source checkout
 
-The repository's [docker-compose.yml](../docker-compose.yml) builds source locally.
+The upstream repository's [docker-compose.yml](https://github.com/rangermix/TwitchDropsMiner/blob/main/docker-compose.yml) builds source locally.
 For a new checkout:
 
 ```bash
@@ -294,8 +298,7 @@ Keep the same project, mounts, and environment configuration. Do not use
 Stop the miner, update the checkout, activate `env/`, run
 `uv sync --active --locked --python 3.12`, and start it again.
 
-Preserve `data/cookies.jar`. Working Android sessions are reused automatically.
-Smart TV sessions from v1.3.1/v1.3.2, expired sessions, and signed-out installations
-use the [dashboard browser](authentication.md#existing-installations). Do not delete all data to solve a login problem.
+Keep the same private `data` directory. If you need to sign in again, follow the
+[login instructions for source installations](authentication.md#dashboard-access-and-source-installations).
 
 [All guides](README.md) · [Next: Twitch login](authentication.md)
