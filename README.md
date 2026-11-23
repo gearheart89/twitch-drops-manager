@@ -7,6 +7,8 @@ progress the same campaign concurrently; each account watches one stream at a ti
 This personal fork of [rangermix/TwitchDropsMiner](https://github.com/rangermix/TwitchDropsMiner)
 adds encrypted account storage, first-run WebUI password setup, password changes,
 global Dark/Light appearance, manual session renewal and Unraid deployment files.
+Optional [link alerts and MQTT notifications](docs/manager-notifications.md) connect
+existing Telegram/Discord destinations and future smart-home automations.
 The engine is based on upstream v2.6.0. See [credits and license notices](THIRD_PARTY_NOTICES.md).
 
 ## Install

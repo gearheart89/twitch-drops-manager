@@ -20,6 +20,7 @@ from routing import rewrite_text, scope_cookie
 from helper_bridge import HelperBridge, NATIVE_ROUTES
 from vault import Vault
 from passwords import hash_password, verify_password
+from notifications import NotificationHub
 
 UI = Path(__file__).parent / 'web'
 RUNTIME = Path('/runtime')
@@ -66,6 +67,7 @@ class Manager:
             if (url.scheme not in ('http', 'https') or not url.hostname or url.username
                     or url.password or url.path or url.query or url.fragment):
                 raise ValueError('PUBLIC_BASE_URL must be an http(s) root URL')
+        self.notifications = NotificationHub(self)
 
     def authenticated(self, request):
         return self.sessions.get(request.cookies.get(COOKIE, ''), 0) > time.time()
@@ -171,6 +173,7 @@ class Manager:
             if account['enabled']:
                 await self.spawn(account)
         self.monitor = asyncio.create_task(self.supervise())
+        await self.notifications.start()
 
     async def spawn(self, account):
         root = RUNTIME / account['id']
@@ -221,6 +224,7 @@ class Manager:
 
     async def close(self, app):
         self.closing = True
+        await self.notifications.close()
         if self.monitor:
             self.monitor.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -287,7 +291,32 @@ class Manager:
             except OSError:
                 raise web.HTTPInsufficientStorage(text='Deletion incomplete. Account is stopped; retry Delete account to finish cleanup.')
             self.failures.pop(account['id'], None)
+            await self.notifications.forget(account['id'])
             return web.json_response({'ok': True})
+
+    async def notification_settings(self, request):
+        if request.method == 'GET':
+            return web.json_response(self.notifications.public())
+        body = await self.password_body(request)
+        async with self.lock:
+            if not self.authenticated(request):
+                raise web.HTTPUnauthorized()
+            try:
+                return web.json_response(await self.notifications.configure(body))
+            except ValueError as error:
+                raise web.HTTPBadRequest(text=str(error))
+            except OSError:
+                raise web.HTTPInsufficientStorage(text='Could not save notification settings')
+
+    async def notification_test(self, request):
+        async with self.notifications.lock:
+            if not self.authenticated(request):
+                raise web.HTTPUnauthorized()
+            publisher = self.notifications.publisher
+            if not publisher.config['enabled']:
+                raise web.HTTPConflict(text='Save an enabled MQTT connection first')
+            publisher.event('', {'event': 'test', 'event_id': secrets.token_hex(12), 'timestamp': time.time()})
+        return web.json_response({'queued': True}, status=202)
 
     async def api(self, request):
         if request.method == 'GET':
@@ -489,7 +518,7 @@ def make_app(manager):
 
     async def file(request):
         name = request.match_info['file']
-        if name not in {'index.html', 'login.html', 'setup.html', 'app.js', 'login.js', 'setup.js', 'style.css', 'icon.svg', 'icon.png'}:
+        if name not in {'index.html', 'login.html', 'setup.html', 'app.js', 'login.js', 'setup.js', 'style.css', 'icon.svg', 'icon.png', 'notifications.js'}:
             raise web.HTTPNotFound()
         return web.FileResponse(UI / name)
 
@@ -520,6 +549,9 @@ def make_app(manager):
     app.router.add_get('/_manager/api/accounts', manager.api)
     app.router.add_get('/_manager/api/settings', manager.settings)
     app.router.add_post('/_manager/api/settings', manager.settings)
+    app.router.add_get('/_manager/api/notifications', manager.notification_settings)
+    app.router.add_post('/_manager/api/notifications', manager.notification_settings)
+    app.router.add_post('/_manager/api/notifications/test', manager.notification_test)
     app.router.add_post('/_manager/api/accounts', manager.api)
     app.router.add_patch('/_manager/api/accounts/{account}', manager.api)
     app.router.add_delete('/_manager/api/accounts/{account}', manager.delete_account)

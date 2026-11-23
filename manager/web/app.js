@@ -211,6 +211,7 @@ async function refresh() {
     fail(result.storage_error ? 'Encrypted saving failed. Check server storage before stopping the container.' : '');
     render();
     await refreshRenewal();
+    window.refreshNotifications?.().catch(() => {});
 }
 
 byId('add-form').addEventListener('submit', async event => {

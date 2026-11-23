@@ -124,6 +124,32 @@ async def main():
                 await command('Emulation.setDeviceMetricsOverride', {'width': 420, 'height': 1000, 'deviceScaleFactor': 1, 'mobile': True})
                 assert await evaluate("document.getElementById('theme-toggle').getBoundingClientRect().height>0 && document.getElementById('renew-now').getBoundingClientRect().right<=innerWidth")
                 mobile = (await command('Page.captureScreenshot', {'format': 'png'}))['data']
+                manager.notifications.observe(manager.accounts[0], {
+                    'logged_in': True, 'renewal_error': None, 'inventory_ready': True,
+                    'observed_at': time.time(), 'refresh_minutes': 30, 'claims': [], 'channels': {},
+                    'campaigns': [{'id': 'fixture-campaign', 'game': 'Sample Game', 'campaign': 'Sample Campaign',
+                                   'linked': False, 'link_url': 'https://example.com/link'}]})
+                await evaluate("window.refreshNotifications()")
+                await until("document.getElementById('link-alerts').hidden===false")
+                link_mobile = (await command('Page.captureScreenshot', {'format': 'png'}))['data']
+                await evaluate("document.getElementById('notifications-button').click()")
+                await until("document.getElementById('notifications-dialog').open")
+                assert not await evaluate("document.getElementById('mqtt-enabled').checked")
+                await evaluate("document.getElementById('mqtt-host').value='mqtt.example.invalid';document.getElementById('mqtt-password').value='synthetic-browser-broker-password';document.getElementById('notifications-save').click()")
+                await until("!document.getElementById('notifications-dialog').open")
+                await evaluate("document.getElementById('notifications-button').click()")
+                await until("document.getElementById('notifications-dialog').open")
+                assert await evaluate("document.getElementById('mqtt-password').value==='' && document.getElementById('mqtt-password').placeholder.includes('Saved password')")
+                notifications_mobile = (await command('Page.captureScreenshot', {'format': 'png'}))['data']
+                await command('Emulation.clearDeviceMetricsOverride')
+                notifications = (await command('Page.captureScreenshot', {'format': 'png'}))['data']
+                await evaluate("document.getElementById('notifications-cancel').click()")
+                link_desktop = (await command('Page.captureScreenshot', {'format': 'png'}))['data']
+                manager.notifications.observations['one']['alerts'][0]['link_url'] = 'https://example.com:wrong/link'
+                await evaluate("window.refreshNotifications()")
+                await evaluate("document.getElementById('notifications-button').click()")
+                await until("document.getElementById('notifications-dialog').open")
+                await evaluate("document.getElementById('notifications-cancel').click()")
                 await evaluate("document.getElementById('delete-account').click()")
                 await until("!!document.querySelector('dialog[open]')")
                 await evaluate("document.getElementById('delete-name').value='wrong name';document.getElementById('confirm-delete').click()")
@@ -133,7 +159,10 @@ async def main():
                 await evaluate("document.getElementById('delete-name').value='Account One';document.getElementById('confirm-delete').click()")
                 await until("!document.querySelector('dialog[open]') && document.querySelectorAll('.account').length===1")
                 assert manager.accounts[0]['id'] == 'two'
-                print(json.dumps({'passed': True, 'dark_png': dark, 'light_png': light, 'mobile_png': mobile, 'deletion_png': deletion}))
+                print(json.dumps({'passed': True, 'dark_png': dark, 'light_png': light, 'mobile_png': mobile,
+                                  'deletion_png': deletion, 'notifications_png': notifications,
+                                  'link_desktop_png': link_desktop, 'link_mobile_png': link_mobile,
+                                  'notifications_mobile_png': notifications_mobile}))
     finally:
         browser.terminate()
         try:

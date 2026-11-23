@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
 from src.auth.session_bundle import SessionBundle, SessionError
+from src.services.manager_notifications import ManagerNotifications
 
 
 if TYPE_CHECKING:
@@ -31,6 +32,8 @@ class SessionAPI:
         self._token_after = 0.0
         self.router = APIRouter()
         self.router.add_api_route("/api/session", self.status, methods=["GET"])
+        self.router.add_api_route("/api/manager/notifications", self.manager_snapshot, methods=["GET"])
+        self.router.add_api_route("/api/manager/notifications", self.manager_notify, methods=["POST"])
         self.router.add_api_route("/api/session/finish", self.finish, methods=["POST"])
         self.router.add_api_route("/api/session/retry", self.retry, methods=["POST"])
         self.router.add_api_route("/api/session/logout", self.logout, methods=["POST"])
@@ -78,6 +81,15 @@ class SessionAPI:
                 return await self.status()
             except SessionError as error:
                 raise self.failure(error) from None
+
+    async def manager_snapshot(self):
+        return ManagerNotifications.snapshot(self.client())
+
+    async def manager_notify(self, request: Request):
+        try:
+            return await ManagerNotifications.send(self.client(), await request.json())
+        except (ValueError, TypeError):
+            raise HTTPException(422, 'invalid_notification') from None
 
     async def enable_helper(self, request: Request):
         try:

@@ -25,3 +25,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 Google Chrome and the other runtime packages retain their packaged license notices. Chrome is installed from Google's signed repository during the build.
+
+The optional MQTT publisher uses aiomqtt 2.5.1 and Eclipse Paho MQTT 2.1.0.
+Their original license/copyright files remain in the installed distributions'
+`*.dist-info/licenses/` directories; Paho declares `EPL-2.0 OR BSD-3-Clause`.
