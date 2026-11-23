@@ -152,15 +152,15 @@ class RenewalTests(unittest.IsolatedAsyncioTestCase):
             app = FastAPI()
             app.include_router(api.router)
             protected = AuthMiddleware(app, auth)
-            async def request(headers):
+            async def request(headers, path='/api/session/renew'):
                 messages = []
                 async def receive():
                     return {'type': 'http.request', 'body': b'', 'more_body': False}
                 async def send(message):
                     messages.append(message)
                 scope = {'type': 'http', 'asgi': {'version': '3.0'}, 'http_version': '1.1',
-                         'scheme': 'http', 'method': 'POST', 'path': '/api/session/renew',
-                         'raw_path': b'/api/session/renew', 'query_string': b'',
+                         'scheme': 'http', 'method': 'POST', 'path': path,
+                         'raw_path': path.encode(), 'query_string': b'',
                          'root_path': '', 'server': ('127.0.0.1', 12000), 'client': ('127.0.0.1', 45000),
                          'headers': [(b'host', b'127.0.0.1:12000')] + [(k.encode(),v.encode()) for k,v in headers.items()]}
                 await protected(scope, receive, send)
@@ -168,6 +168,10 @@ class RenewalTests(unittest.IsolatedAsyncioTestCase):
                 body = b''.join(m.get('body',b'') for m in messages if m['type'] == 'http.response.body')
                 return code, json.loads(body)
             safe = {'x-tdm-request': '1', 'origin': 'http://127.0.0.1:12000'}
+            notification_path = '/api/manager/notifications'
+            self.assertEqual((await request(safe, notification_path))[0], 401)
+            self.assertEqual((await request({'cookie':'tdm_session=synthetic-session'}, notification_path))[0], 403)
+            self.assertEqual((await request({**safe, 'cookie':'tdm_session=synthetic-session'}, notification_path))[0], 422)
             self.assertEqual((await request(safe))[0], 401)
             self.assertEqual((await request({'cookie':'tdm_session=synthetic-session'}))[0], 403)
             self.assertEqual((await request({**safe, 'cookie':'tdm_session=synthetic-session', 'origin':'http://other.invalid'}))[0], 403)

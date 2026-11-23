@@ -13,6 +13,7 @@ from cryptography.fernet import Fernet
 from routing import rewrite_text, scope_cookie
 from server import Manager, make_app
 from vault import Vault
+from mqtt_notifications import default_config
 
 
 class RoutingTests(unittest.TestCase):
@@ -104,6 +105,36 @@ class ManagerTests(unittest.IsolatedAsyncioTestCase):
             result = await self.client.post('/_manager/api/settings', headers=self.headers, json={'theme': 'dark'})
         self.assertEqual(result.status, 507)
         self.assertEqual(self.manager.preferences['theme'], 'light')
+
+    async def test_notifications_require_auth_redact_password_and_persist(self):
+        response = await self.client.get('/_manager/api/notifications')
+        self.assertEqual(response.status, 401)
+        await self.login()
+        config = default_config()
+        config['mqtt'].update(host='localhost', password='synthetic-integration-secret')
+        self.assertEqual((await self.client.post('/_manager/api/notifications', json=config)).status, 403)
+        response = await self.client.post('/_manager/api/notifications', headers=self.headers, json=config)
+        self.assertEqual(response.status, 200)
+        text = await response.text()
+        self.assertNotIn('synthetic-integration-secret', text)
+        self.assertTrue((await response.json())['settings']['mqtt']['password_set'])
+        restarted = Manager(vault=self.vault, password='test-password-for-dashboard', enforce_tmpfs=False)
+        self.assertEqual(restarted.notifications.config['mqtt']['password'], 'synthetic-integration-secret')
+        response = await self.client.post('/_manager/api/notifications/test', headers=self.headers)
+        self.assertEqual(response.status, 409)
+
+    async def test_invalid_notification_settings_and_failed_save_keep_previous_config(self):
+        await self.login()
+        config = default_config()
+        config['mqtt']['port'] = True
+        response = await self.client.post('/_manager/api/notifications', headers=self.headers, json=config)
+        self.assertEqual(response.status, 400)
+        config = default_config()
+        config['mqtt']['username'] = 'new-user'
+        with patch.object(self.vault, 'save', side_effect=OSError):
+            response = await self.client.post('/_manager/api/notifications', headers=self.headers, json=config)
+        self.assertEqual(response.status, 507)
+        self.assertEqual(self.manager.notifications.config['mqtt']['username'], '')
 
     async def test_icons_are_public_without_exposing_account_data(self):
         for path, kind in [('/_manager/icon.svg', 'image/svg+xml'), ('/_manager/icon.png', 'image/png'), ('/favicon.ico', 'image/png')]:

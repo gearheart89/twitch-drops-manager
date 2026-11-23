@@ -133,6 +133,7 @@ class InventoryService:
         6. Sets up maintenance triggers for campaign timing changes
         """
         status_update = self._twitch.gui.status.update
+        self._twitch.manager_inventory_fetching = True
         status_update(_.t["gui"]["status"]["fetching_inventory"])
 
         # fetch in-progress campaigns (inventory)
@@ -242,6 +243,9 @@ class InventoryService:
         self._twitch._mnt_task = asyncio.create_task(
             self._twitch._maintenance_service.run_maintenance_task()
         )
+
+        self._twitch.manager_inventory_at = datetime.now(timezone.utc).timestamp()
+        self._twitch.manager_inventory_fetching = False
 
     def get_active_campaign(self, channel: Channel | None = None) -> DropsCampaign | None:
         """

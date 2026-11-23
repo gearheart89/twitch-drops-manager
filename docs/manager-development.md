@@ -10,6 +10,10 @@ matching the working local image's engine revision.
 `main.py`) and `manager/`. The known dependency versions and noVNC assets come from
 a pinned upstream image. Upstream/Python image digests are pinned. Genuine Chrome
 is installed from Google's signed repository. Only Linux AMD64 is built.
+Additional manager dependencies are pinned in `manager/requirements.txt`; the
+upstream engine's dependency and lock files remain unchanged. Notification settings
+and transition baselines use the existing encrypted vault. MQTT is outbound only
+and disabled by default; see [notification integration](manager-notifications.md).
 
 `manager/adapt_upstream.py` applies asserted integration patches in the image.
 When changing affected engine sections, update the assertions deliberately; failed

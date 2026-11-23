@@ -15,7 +15,8 @@ RUN groupadd --gid 10001 tdm-browser \
     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin tdm-browser
 COPY --from=miner /usr/share/novnc /usr/share/novnc
 COPY --from=miner /requirements-miner.txt /requirements-miner.txt
-RUN python -m pip install --no-cache-dir -r /requirements-miner.txt cryptography==50.0.2 \
+COPY manager/requirements.txt /requirements-manager.txt
+RUN python -m pip install --no-cache-dir -r /requirements-miner.txt -r /requirements-manager.txt \
     && python -m pip uninstall -y pip
 RUN apt-get update && apt-get install -y --no-install-recommends wmctrl \
     && rm -rf /var/lib/apt/lists/*

@@ -91,6 +91,8 @@ class Twitch:
         # Runtime-only queue order from the dashboard; the saved Mining list is the default.
         self.game_order = TemporaryGameOrder()
         self.inventory: list[DropsCampaign] = []
+        self.manager_inventory_at: float | None = None
+        self.manager_inventory_fetching = False
         self._drops: dict[str, TimedDrop] = {}
         self._campaigns: dict[str, DropsCampaign] = {}
         self._mnt_triggers: deque[datetime] = deque()
